@@ -81,12 +81,60 @@ show()
 # Finding the frauds
 mappings = som.win_map(data = X) # this method returns a mapping of all winning nodes to their associated data points in the dataset. The data returned is in the form of a dictionary where the key is a tuple that represents the coordinates of the winning node, and the value is the list of customers that are associated to that winning node
 # In the course, there were two squares whose color was white.
-# The coordinates of these squares are (8, 1) and (6, 8) respectively (the coordinates of a square are the ones of the bottom left point of the square)
+# The coordinates of these squares are (5, 3) and (8, 3) respectively (the coordinates of a square are the ones of the bottom left point of the square)
 # White squares reflect high MID and therefore potentially contain the cheating customers
 # Note: that for every run of this code, the squares with white color change. But we will stick 
 # to the squares (the coordinates) that were mentioned in the course.
-frauds = np.concatenate((mappings[(8, 1)], mappings[(6, 8)]), axis = 0) # concatenating the list of customers associated with the two winning nodes vertically
+print(mappings)
+frauds = np.concatenate((mappings[(5, 3)], mappings[(8, 3)]), axis = 0) # concatenating the list of customers associated with the two winning nodes vertically
 # after the concatenation the list in frauds acutally contain the customers who are *potentially* frauds
 frauds = sc.inverse_transform(frauds) # Since we scaled (normalized) the data set, we need to return the data associated with the list potentially fraudulent customers to its original form, so we do an inverse transform
 # after descaling, the first column is that of the customer IDs
 # We can therefore give this list of IDs to the bank employees so that they can conduct further investigation to know which customers actualy cheated although they were granted the credit card
+
+
+# Part 2 - Going from Unsupervised to Supervised Deep Learning (Artificial Neural Network)
+# Creating a matrix of features
+customers = dataset.iloc[:, 1:].values # We include all columns except the first one (which is the customer ID and we don't need it in the matrix of features). Note: here we included the last column because it's the class (whether the application for credit card was accepted or not) because we may need this feature later on
+# Creating the dependent variable:
+is_fraud = np.zeros(len(dataset)) # Creating a vector with the length of the dataset initialized with zeros (initially, we assume that all the customers are not fraudelent)
+# We are going to consider the customers who are in the white squares in the SOM above to be the fraudulent ones
+# Therefore we are going to set to 1 their positions in the is_fraud vector (the vector is indexed by the customer ID)
+for i in range(len(dataset)):
+    if dataset.iloc[i, 0] in frauds: # if the customer ID in question is in the frauds, we set the value for that customer ID in the in_fraud vector to 1 (the vector is indexed by the customer ID)
+        is_fraud[i] = 1
+
+# Building the ANN:
+# Feature Scaling
+from sklearn.preprocessing import StandardScaler
+sc = StandardScaler()
+customers = sc.fit_transform(customers) # No need to scale the dependent variable because it takes the values 0 and 1
+
+# Importing the Keras libraries and packages
+from keras.models import Sequential
+from keras.layers import Dense
+
+# Initializing the ANN
+classifier = Sequential()
+
+# Adding the input layer and the first hidden layer
+# Since we have only 690 data points, it's a very simple dataset. Therefore, we only use 2 neurons and only one hidden layer
+# Since we have 15 features, we set the input dimensions (input_dim) to 15
+classifier.add(Dense(units = 2, kernel_initializer = 'uniform', activation = 'relu', input_dim = 15 ))
+
+# Adding the output layer
+classifier.add(Dense(units = 1, kernel_initializer = 'uniform', activation = 'sigmoid'))
+
+# Compiling the ANN
+classifier.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
+
+# Fitting the ANN to the training set
+# Again, because of the simplicity of the dataset, we set the batch_size to 1 and the number of epochs to 2
+classifier.fit(customers, is_fraud, batch_size = 1, epochs = 2)
+
+# Predicting the probabilities of frauds (among all customers)
+y_pred = classifier.predict(customers)
+y_pred = np.concatenate((dataset.iloc[:, 0:1].values, y_pred), axis = 1) # Horizontal concatenation to have a two-dimensional array that contains the customer IDs and the fraud probabilities
+y_pred = y_pred[y_pred[:, 1].argsort()] # Sorting the y_pred array by the second column (fraud probability) in ascending order
+
+print(y_pred)
